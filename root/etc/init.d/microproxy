@@ -424,9 +424,10 @@ start_service() {
 	
 	# 2. Generate JSON config
 	if ! generate_singbox_config; then
-		echo "Sing-box config generation failed!"
-		logger -t microproxy "Error: Sing-box config generation failed!"
-		return 1
+		echo "Sing-box config generation failed or no servers configured."
+		logger -t microproxy "Warning: Sing-box config generation failed. No active servers configured or enabled."
+		clear_network
+		return 0
 	fi
 	
 	# 3. Find sing-box binary dynamically
@@ -446,7 +447,8 @@ start_service() {
 		local err_msg=$(cat "$check_log")
 		echo "Sing-box config check failed! Error: $err_msg"
 		logger -t microproxy "Config validation failed! Error: $err_msg"
-		return 1
+		clear_network
+		return 0
 	fi
 	
 	# 5. Generate and apply nftables rules

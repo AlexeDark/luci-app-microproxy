@@ -53,6 +53,7 @@ download_file "root/etc/config/microproxy" "/etc/config/microproxy"
 download_file "root/etc/init.d/microproxy" "/etc/init.d/microproxy"
 download_file "root/etc/uci-defaults/luci-app-microproxy" "/etc/uci-defaults/luci-app-microproxy"
 download_file "root/usr/share/microproxy/update_lists.sh" "/usr/share/microproxy/update_lists.sh"
+download_file "root/usr/share/microproxy/update_vless_sub.sh" "/usr/share/microproxy/update_vless_sub.sh"
 download_file "root/usr/share/luci/menu.d/luci-app-microproxy.json" "/usr/share/luci/menu.d/luci-app-microproxy.json"
 download_file "root/usr/share/rpcd/acl.d/luci-app-microproxy.json" "/usr/share/rpcd/acl.d/luci-app-microproxy.json"
 download_file "root/www/luci-static/resources/microproxy.css" "/www/luci-static/resources/microproxy.css"
@@ -65,6 +66,7 @@ download_file "root/www/luci-static/resources/view/microproxy/advanced.js" "/www
 echo "Applying file permissions and defaults..."
 chmod +x /etc/init.d/microproxy
 chmod +x /usr/share/microproxy/update_lists.sh
+chmod +x /usr/share/microproxy/update_vless_sub.sh
 
 # Run post-install configurations
 sh /etc/uci-defaults/luci-app-microproxy

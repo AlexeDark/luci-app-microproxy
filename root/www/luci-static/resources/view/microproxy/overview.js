@@ -234,8 +234,16 @@ return L.view.extend({
 							'class': 'mp-btn mp-btn-secondary',
 							'click': function() {
 								var logArea = document.getElementById('log_output');
-								L.fs.exec('/usr/sbin/logread', ['-e', 'sing-box']).then(function(res) {
-									logArea.value = (res && res.stdout) ? res.stdout.trim() : 'Логов Sing-box не обнаружено в системном журнале.';
+								L.fs.exec('/sbin/logread', ['-l', '100']).then(function(res) {
+									if (res && res.stdout) {
+										var lines = res.stdout.trim().split('\n').filter(function(line) {
+											var l = line.toLowerCase();
+											return l.indexOf('sing-box') !== -1 || l.indexOf('microproxy') !== -1;
+										});
+										logArea.value = lines.length ? lines.join('\n') : 'Сообщений от Sing-box / MicroProxy не обнаружено в системном журнале.';
+									} else {
+										logArea.value = 'Системный журнал пуст.';
+									}
 									logArea.scrollTop = logArea.scrollHeight;
 								});
 							}
@@ -249,8 +257,16 @@ return L.view.extend({
 		setTimeout(function() {
 			var logArea = document.getElementById('log_output');
 			if (logArea) {
-				L.fs.exec('/usr/sbin/logread', ['-e', 'sing-box']).then(function(res) {
-					logArea.value = (res && res.stdout) ? res.stdout.trim() : 'Логов Sing-box не обнаружено в системном журнале.';
+				L.fs.exec('/sbin/logread', ['-l', '100']).then(function(res) {
+					if (res && res.stdout) {
+						var lines = res.stdout.trim().split('\n').filter(function(line) {
+							var l = line.toLowerCase();
+							return l.indexOf('sing-box') !== -1 || l.indexOf('microproxy') !== -1;
+						});
+						logArea.value = lines.length ? lines.join('\n') : 'Сообщений от Sing-box / MicroProxy не обнаружено в системном журнале.';
+					} else {
+						logArea.value = 'Системный журнал пуст.';
+					}
 					logArea.scrollTop = logArea.scrollHeight;
 				});
 			}

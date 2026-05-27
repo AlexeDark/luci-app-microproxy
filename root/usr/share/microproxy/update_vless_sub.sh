@@ -9,13 +9,12 @@ CONF_FILE="/etc/config/microproxy"
 
 # Base64 decoder helper
 decode_base64() {
-	local raw="$1"
 	if which base64 >/dev/null 2>&1; then
-		echo "$raw" | base64 -d 2>/dev/null
+		tr -d '\n\r ' | base64 -d 2>/dev/null
 	elif which openssl >/dev/null 2>&1; then
-		echo "$raw" | openssl enc -d -base64 2>/dev/null
+		tr -d '\n\r ' | openssl enc -d -base64 2>/dev/null
 	else
-		echo "$raw" # Fallback if no decoder
+		tr -d '\n\r '
 	fi
 }
 
@@ -167,13 +166,12 @@ update_subscription() {
 		decoded_data="$raw_data"
 	else
 		echo "Subscription data appears to be Base64 encoded. Decoding..."
-		decoded_data=$(decode_base64 "$raw_data")
+		decoded_data=$(printf '%s\n' "$raw_data" | decode_base64)
 		if [ -z "$decoded_data" ] || ! echo "$decoded_data" | grep -q "vless://"; then
 			echo "Base64 decoding failed or no vless:// links found. Falling back to raw data."
 			decoded_data="$raw_data"
 		fi
 	fi
-	
 	
 	# 3. Clean up previously imported servers of this group
 	delete_old_servers "$section"
@@ -181,9 +179,10 @@ update_subscription() {
 	# 4. Parse links and write to UCI
 	local imported_count=0
 	
-	# Loop through lines using IFS
+	# Loop through lines using IFS (literal newline for POSIX sh)
 	local IFS_old="$IFS"
-	IFS=$'\n'
+	IFS="
+"
 	for line in $decoded_data; do
 		# Remove carriage returns
 		line=$(echo "$line" | tr -d '\r' | xargs)

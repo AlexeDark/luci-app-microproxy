@@ -224,7 +224,7 @@ return L.view.extend({
 		subUrl.datatype = 'url';
 
 		var subShow = sub.option(form.DummyValue, '_show_servers', 'Список серверов');
-		subShow.renderWidget = function(section_id, option_index, cfgvalue) {
+		subShow.cfgvalue = function(section_id) {
 			var name = L.uci.get('microproxy', section_id, 'name') || 'Подписка';
 			return E('button', {
 				'class': 'mp-btn mp-btn-secondary',
@@ -338,7 +338,7 @@ return L.view.extend({
 		xp.modalonly = true;
 
 		// Ping action button inside grid
-		s.option(form.DummyValue, 'ping', 'Задержка (RTT)').renderWidget = function(section_id, option_index, cfgvalue) {
+		s.option(form.DummyValue, 'ping', 'Задержка (RTT)').cfgvalue = function(section_id) {
 			var pingBtn = E('button', {
 				'class': 'mp-btn mp-btn-secondary ping-indicator',
 				'style': 'padding: 0.25rem 0.5rem; font-size: 0.75rem;',

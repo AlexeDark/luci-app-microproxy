@@ -5,48 +5,23 @@
 	margin-bottom: 2rem;
 }
 
-/* Glassmorphism Cards */
+/* Theme-Adaptive Cards */
 .mp-card {
-	background: #ffffff;
-	color: #1e293b;
-	border: 1px solid #e2e8f0;
+	background: rgba(128, 128, 128, 0.06);
+	border: 1px solid rgba(128, 128, 128, 0.18);
 	border-radius: 16px;
 	padding: 1.5rem;
 	margin-bottom: 1.5rem;
-	box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+	box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
 	transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-}
-
-/* Explicit heading colors inside cards */
-.mp-card h3, .mp-card h4 {
-	color: #0f172a !important;
-}
-
-.dark-mode .mp-card h3,
-[theme="dark"] .mp-card h3,
-.theme-dark .mp-card h3,
-body.dark .mp-card h3,
-.dark-mode .mp-card h4,
-[theme="dark"] .mp-card h4,
-.theme-dark .mp-card h4,
-body.dark .mp-card h4 {
-	color: #f8fafc !important;
-}
-
-.dark-mode .mp-card,
-[theme="dark"] .mp-card,
-.theme-dark .mp-card,
-body.dark .mp-card {
-	background: #1e1e2e !important;
-	color: #cbd5e1 !important;
-	border: 1px solid #313244 !important;
-	box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2) !important;
 }
 
 .mp-card:hover {
 	transform: translateY(-2px);
-	box-shadow: 0 12px 20px rgba(0, 0, 0, 0.08);
+	box-shadow: 0 12px 20px rgba(0, 0, 0, 0.04);
+	background: rgba(128, 128, 128, 0.09);
 }
+
 
 
 /* Header & Typography */
@@ -191,8 +166,15 @@ body.dark .mp-card {
 	border: 1px solid #cbd5e1;
 	outline: none;
 	transition: border 0.2s ease;
-	background: #ffffff;
-	color: #0f172a;
+.mp-quick-add input {
+	flex: 1;
+	padding: 0.75rem 1rem;
+	border-radius: 12px;
+	border: 1px solid rgba(128, 128, 128, 0.25);
+	outline: none;
+	transition: border 0.2s ease;
+	background: rgba(128, 128, 128, 0.08);
+	color: inherit;
 }
 
 .mp-quick-add input:focus {
@@ -200,12 +182,4 @@ body.dark .mp-card {
 	box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
-.dark-mode .mp-quick-add input,
-[theme="dark"] .mp-quick-add input,
-.theme-dark .mp-quick-add input,
-body.dark .mp-quick-add input {
-	background: #232334 !important;
-	color: #cdd6f4 !important;
-	border-color: #45475a !important;
-}
 

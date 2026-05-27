@@ -57,7 +57,7 @@ return L.view.extend({
 							L.uci.save().then(function() {
 								return L.uci.apply();
 							}).then(function() {
-								L.ui.closeModal();
+								L.ui.hideModal();
 								L.ui.addNotification('success', E('p', {}, 'Сервер "' + (server.alias || 'VLESS') + '" выбран как активный!'));
 								setTimeout(function() { window.location.reload(); }, 1500);
 							}).catch(function(err) {
@@ -129,7 +129,7 @@ return L.view.extend({
 			var footer = E('div', { 'class': 'right', 'style': 'margin-top:1.5rem; text-align:right;' }, [
 				E('button', {
 					'class': 'mp-btn mp-btn-secondary',
-					'click': L.ui.closeModal
+					'click': L.ui.hideModal
 				}, 'Закрыть')
 			]);
 			modalBody.appendChild(footer);
@@ -224,7 +224,7 @@ return L.view.extend({
 		subUrl.datatype = 'url';
 
 		var subShow = sub.option(form.DummyValue, '_show_servers', 'Список серверов');
-		subShow.render = function(section_id) {
+		subShow.renderWidget = function(section_id, option_index, cfgvalue) {
 			var name = L.uci.get('microproxy', section_id, 'name') || 'Подписка';
 			return E('button', {
 				'class': 'mp-btn mp-btn-secondary',
@@ -338,7 +338,7 @@ return L.view.extend({
 		xp.modalonly = true;
 
 		// Ping action button inside grid
-		s.option(form.DummyValue, 'ping', 'Задержка (RTT)').render = function(section_id) {
+		s.option(form.DummyValue, 'ping', 'Задержка (RTT)').renderWidget = function(section_id, option_index, cfgvalue) {
 			var pingBtn = E('button', {
 				'class': 'mp-btn mp-btn-secondary ping-indicator',
 				'style': 'padding: 0.25rem 0.5rem; font-size: 0.75rem;',

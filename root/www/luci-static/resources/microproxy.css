@@ -182,4 +182,24 @@
 	box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
+/* Modal and badge customizations */
+.mp-modal-row {
+	transition: all 0.2s ease;
+}
+.mp-modal-row:hover {
+	background: rgba(128, 128, 128, 0.08) !important;
+}
+.mp-modal-row-active {
+	border-color: #22c55e !important;
+	background: rgba(34, 197, 94, 0.05) !important;
+}
+.mp-badge-source {
+	background: rgba(79, 70, 229, 0.1);
+	color: #4f46e5;
+	padding: 0.15rem 0.4rem;
+	border-radius: 6px;
+	font-size: 0.75rem;
+	font-weight: 600;
+}
+
 

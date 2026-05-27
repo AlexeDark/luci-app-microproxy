@@ -50,6 +50,13 @@ return L.view.extend({
 			running = serviceList.microproxy.instances.main.running;
 		}
 
+		// Active server configuration loading
+		var servers = L.uci.sections('microproxy', 'server') || [];
+		var enabledServers = servers.filter(function(s) {
+			return s.enabled === '1';
+		});
+		var activeServer = L.uci.get('microproxy', 'main', 'active_server') || 'auto';
+
 		// Inject Custom Stylesheet
 		var css = document.createElement('link');
 		css.rel = 'stylesheet';
@@ -121,6 +128,41 @@ return L.view.extend({
 						E('br'),
 						E('strong', {}, 'Временных обходов: '),
 						E('span', {}, dynamicIPs.length + ' активных IP-адресов')
+					])
+				])
+			]),
+
+			// Active Server Selector Card
+			E('div', { 'class': 'mp-card' }, [
+				E('h3', {}, '🔌 Выбор активного прокси-сервера'),
+				E('p', { 'style': 'color:#64748b; font-size:0.9rem;' }, 
+					'Выберите конкретный сервер для принудительного использования или оставьте автоматический выбор (urltest), который на основе фонового пинга выберет самый быстрый сервер.'
+				),
+				E('div', { 'style': 'display:flex; gap:1rem; align-items:center; margin-top:1.25rem;' }, [
+					E('span', { 'style': 'font-weight:bold; color:inherit; font-size:0.95rem; min-width:140px;' }, 'Активный сервер:'),
+					E('select', {
+						'id': 'active_server_select',
+						'style': 'flex:1; padding:0.6rem 1rem; border-radius:12px; border:1px solid rgba(128,128,128,0.25); background:rgba(128,128,128,0.08); color:inherit; outline:none; font-weight:600; cursor:pointer;',
+						'change': function(ev) {
+							var val = ev.target.value;
+							L.ui.showIndicator();
+							L.uci.set('microproxy', 'main', 'active_server', val);
+							L.uci.save().then(function() {
+								return L.uci.apply();
+							}).then(function() {
+								L.ui.addNotification('success', E('p', {}, 'Выбранный сервер сохранен и применен!'));
+								setTimeout(function() { window.location.reload(); }, 1500);
+							}).catch(function(err) {
+								L.ui.addNotification('danger', E('p', {}, 'Ошибка сохранения: ' + err.message));
+								L.ui.hideIndicator();
+							});
+						}
+					}, [
+						E('option', { 'value': 'auto', 'selected': (activeServer === 'auto') }, '⚡ Автоматический выбор (наименьший пинг)'),
+						enabledServers.map(function(s) {
+							var serverText = (s.alias || 'VLESS') + ' (' + s.server + ':' + (s.server_port || '443') + ')';
+							return E('option', { 'value': s['.name'], 'selected': (activeServer === s['.name']) }, serverText);
+						})
 					])
 				])
 			]),
@@ -234,18 +276,7 @@ return L.view.extend({
 							'class': 'mp-btn mp-btn-secondary',
 							'click': function() {
 								var logArea = document.getElementById('log_output');
-								L.fs.exec('/sbin/logread', ['-l', '100']).then(function(res) {
-									if (res && res.stdout) {
-										var lines = res.stdout.trim().split('\n').filter(function(line) {
-											var l = line.toLowerCase();
-											return l.indexOf('sing-box') !== -1 || l.indexOf('microproxy') !== -1;
-										});
-										logArea.value = lines.length ? lines.join('\n') : 'Сообщений от Sing-box / MicroProxy не обнаружено в системном журнале.';
-									} else {
-										logArea.value = 'Системный журнал пуст.';
-									}
-									logArea.scrollTop = logArea.scrollHeight;
-								});
+								refreshLogs(logArea);
 							}
 						}, 'Обновить логи')
 					])
@@ -253,23 +284,42 @@ return L.view.extend({
 			])
 		]);
 
+		function refreshLogs(logArea) {
+			if (!logArea) return;
+			Promise.all([
+				L.fs.exec('/sbin/logread', ['-l', '150']),
+				L.fs.read('/tmp/sing-box-check.log').catch(function() { return ''; })
+			]).then(function(results) {
+				var logRes = results[0];
+				var checkLog = results[1];
+				
+				var output = '';
+				if (checkLog && checkLog.trim().length > 0) {
+					output += '=== КРИТИЧЕСКАЯ ОШИБКА ПРОВЕРКИ КОНФИГУРАЦИИ (SING-BOX CHECK) ===\n';
+					output += checkLog.trim() + '\n\n';
+				}
+				
+				output += '=== СИСТЕМНЫЙ ЖУРНАЛ (logread -l 150) ===\n';
+				if (logRes && logRes.stdout) {
+					var lines = logRes.stdout.trim().split('\n').filter(function(line) {
+						var l = line.toLowerCase();
+						return l.indexOf('sing-box') !== -1 || l.indexOf('microproxy') !== -1;
+					});
+					output += lines.length ? lines.join('\n') : 'Сообщений от Sing-box / MicroProxy не обнаружено в системном журнале.';
+				} else {
+					output += 'Системный журнал пуст.';
+				}
+				logArea.value = output;
+				logArea.scrollTop = logArea.scrollHeight;
+			}).catch(function(err) {
+				logArea.value = 'Ошибка чтения логов: ' + err.message;
+			});
+		}
+
 		// Load logs automatically on mount
 		setTimeout(function() {
 			var logArea = document.getElementById('log_output');
-			if (logArea) {
-				L.fs.exec('/sbin/logread', ['-l', '100']).then(function(res) {
-					if (res && res.stdout) {
-						var lines = res.stdout.trim().split('\n').filter(function(line) {
-							var l = line.toLowerCase();
-							return l.indexOf('sing-box') !== -1 || l.indexOf('microproxy') !== -1;
-						});
-						logArea.value = lines.length ? lines.join('\n') : 'Сообщений от Sing-box / MicroProxy не обнаружено в системном журнале.';
-					} else {
-						logArea.value = 'Системный журнал пуст.';
-					}
-					logArea.scrollTop = logArea.scrollHeight;
-				});
-			}
+			refreshLogs(logArea);
 		}, 100);
 
 		return container;

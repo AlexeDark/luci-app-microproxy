@@ -18,6 +18,125 @@ return L.view.extend({
 		css.href = '/luci-static/resources/microproxy.css';
 		document.head.appendChild(css);
 
+		var subs = L.uci.sections('microproxy', 'server_subscription') || [];
+		var subMap = {};
+		subs.forEach(function(sb) {
+			subMap[sb['.name']] = sb.name || 'Подписка';
+		});
+
+		function showSubscriptionServersModal(subId, subName) {
+			var servers = L.uci.sections('microproxy', 'server') || [];
+			var subServers = servers.filter(function(s) {
+				return s.subscribe_group === subId;
+			});
+
+			var modalBody = E('div', { 'class': 'mp-modal-body' }, [
+				E('p', { 'style': 'margin-bottom:1rem; color:#64748b;' }, 
+					'Ниже представлены все серверы, полученные из этой подписки. Вы можете проверить их пинг и выбрать активный сервер.'
+				)
+			]);
+
+			if (subServers.length === 0) {
+				modalBody.appendChild(E('div', { 'style': 'padding:1.5rem; text-align:center; color:#94a3b8; font-style:italic;' }, 'Нет импортированных серверов для этой подписки. Нажмите кнопку "Обновить VLESS подписки", чтобы загрузить их.'));
+			} else {
+				var listContainer = E('div', { 'style': 'display:flex; flex-direction:column; gap:0.5rem; max-height:400px; overflow-y:auto;' });
+				
+				subServers.forEach(function(server) {
+					var serverId = server['.name'];
+					
+					var selectBtn = E('button', {
+						'class': 'mp-btn mp-btn-primary',
+						'style': 'padding:0.25rem 0.75rem; font-size:0.75rem;',
+						'click': function(ev) {
+							ev.target.disabled = true;
+							L.ui.showIndicator();
+							
+							L.uci.set('microproxy', serverId, 'enabled', '1');
+							L.uci.set('microproxy', 'main', 'active_server', serverId);
+							
+							L.uci.save().then(function() {
+								return L.uci.apply();
+							}).then(function() {
+								L.ui.closeModal();
+								L.ui.addNotification('success', E('p', {}, 'Сервер "' + (server.alias || 'VLESS') + '" выбран как активный!'));
+								setTimeout(function() { window.location.reload(); }, 1500);
+							}).catch(function(err) {
+								L.ui.addNotification('danger', E('p', {}, 'Ошибка: ' + err.message));
+								L.ui.hideIndicator();
+								ev.target.disabled = false;
+							});
+						}
+					}, 'Выбрать');
+
+					var pingBtn = E('button', {
+						'class': 'mp-btn mp-btn-secondary ping-indicator',
+						'style': 'padding:0.25rem 0.5rem; font-size:0.75rem; min-width:80px;',
+						'click': function(ev) {
+							ev.preventDefault();
+							ev.target.textContent = '...';
+							ev.target.className = 'mp-btn mp-btn-secondary ping-indicator';
+							
+							L.fs.exec('/bin/ping', ['-c', '3', '-W', '2', server.server]).then(function(res) {
+								if (res && res.code === 0) {
+									var match = res.stdout.match(/rtt min\/avg\/max\/mdev = [0-9.]+\/([0-9.]+)/);
+									if (match) {
+										var avg = parseFloat(match[1]);
+										ev.target.textContent = avg.toFixed(0) + ' ms';
+										if (avg < 80) {
+											ev.target.className = 'mp-btn mp-btn-secondary ping-indicator ping-fast';
+										} else if (avg < 180) {
+											ev.target.className = 'mp-btn mp-btn-secondary ping-indicator ping-medium';
+										} else {
+											ev.target.className = 'mp-btn mp-btn-secondary ping-indicator ping-slow';
+										}
+										return;
+									}
+								}
+								ev.target.textContent = 'Недоступен';
+								ev.target.className = 'mp-btn mp-btn-secondary ping-indicator ping-slow';
+							}).catch(function() {
+								ev.target.textContent = 'Ошибка';
+								ev.target.className = 'mp-btn mp-btn-secondary ping-indicator ping-slow';
+							});
+						}
+					}, 'Пинг');
+
+					var isActive = (L.uci.get('microproxy', 'main', 'active_server') === serverId);
+
+					var row = E('div', { 
+						'class': 'mp-modal-row' + (isActive ? ' mp-modal-row-active' : ''),
+						'style': 'display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border-radius:8px; background:rgba(0,0,0,0.02); border:1px solid rgba(0,0,0,0.05);' 
+					}, [
+						E('div', { 'style': 'display:flex; flex-direction:column; gap:0.15rem; flex:1;' }, [
+							E('div', { 'style': 'font-weight:bold; font-size:0.9rem;' }, [
+								server.alias || 'VLESS',
+								isActive ? E('span', { 'style': 'margin-left:0.5rem; font-size:0.7rem; background:#22c55e; color:#fff; padding:0.1rem 0.4rem; border-radius:4px;' }, 'Активен') : ''
+							]),
+							E('div', { 'style': 'color:#64748b; font-size:0.8rem; font-family:monospace;' }, server.server + ':' + (server.server_port || '443') + ' (' + (server.transport === 'xhttp' ? 'XHTTP' : 'TCP') + ')')
+						]),
+						E('div', { 'style': 'display:flex; gap:0.5rem; align-items:center;' }, [
+							pingBtn,
+							selectBtn
+						])
+					]);
+
+					listContainer.appendChild(row);
+				});
+
+				modalBody.appendChild(listContainer);
+			}
+
+			var footer = E('div', { 'class': 'right', 'style': 'margin-top:1.5rem; text-align:right;' }, [
+				E('button', {
+					'class': 'mp-btn mp-btn-secondary',
+					'click': L.ui.closeModal
+				}, 'Закрыть')
+			]);
+			modalBody.appendChild(footer);
+
+			L.ui.showModal('Серверы подписки: ' + subName, modalBody);
+		}
+
 		var m = new form.Map('microproxy', 'Прокси-серверы', 'Добавление, редактирование и автоматическая синхронизация серверов VLESS Reality.');
 
 		// 1. Single Link Quick Importer Card
@@ -104,6 +223,19 @@ return L.view.extend({
 		subUrl.placeholder = 'https://veravpn.ru/sub/abc123xyz';
 		subUrl.datatype = 'url';
 
+		var subShow = sub.option(form.DummyValue, '_show_servers', 'Список серверов');
+		subShow.render = function(section_id) {
+			var name = L.uci.get('microproxy', section_id, 'name') || 'Подписка';
+			return E('button', {
+				'class': 'mp-btn mp-btn-secondary',
+				'style': 'padding: 0.25rem 0.5rem; font-size: 0.75rem;',
+				'click': function(ev) {
+					ev.preventDefault();
+					showSubscriptionServersModal(section_id, name);
+				}
+			}, 'Показать серверы');
+		};
+
 		// Custom button to trigger background VLESS subscriptions update
 		var updateBtnSection = m.section(form.NamedSection, 'main', 'global', '');
 		updateBtnSection.render = function() {
@@ -138,6 +270,13 @@ return L.view.extend({
 
 		// Server Fields in Table View
 		s.option(form.Flag, 'enabled', 'Вкл.');
+
+		var group = s.option(form.DummyValue, 'subscribe_group', 'Источник');
+		group.render = function(section_id) {
+			var groupId = L.uci.get('microproxy', section_id, 'subscribe_group');
+			var name = groupId ? (subMap[groupId] || 'Подписка') : 'Вручную';
+			return E('span', { 'class': 'mp-badge-source' }, name);
+		};
 		
 		var alias = s.option(form.Value, 'alias', 'Название');
 		alias.placeholder = 'My Server';

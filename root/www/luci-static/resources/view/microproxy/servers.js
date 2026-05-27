@@ -1,15 +1,9 @@
 'use strict';
 'use ui';
 
-var view = require('view');
-var form = require('form');
-var uci = require('uci');
-var ui = require('ui');
-var fs = require('fs');
-
-return view.extend({
+return L.view.extend({
 	load: function() {
-		return uci.load('microproxy');
+		return L.uci.load('microproxy');
 	},
 
 	render: function() {
@@ -19,10 +13,10 @@ return view.extend({
 		css.href = '/luci-static/resources/microproxy.css';
 		document.head.appendChild(css);
 
-		var m = new form.Map('microproxy', 'Прокси-серверы', 'Добавление и редактирование серверов VLESS Reality (TCP / XHTTP).');
+		var m = new L.cbi.Map('microproxy', 'Прокси-серверы', 'Добавление и редактирование серверов VLESS Reality (TCP / XHTTP).');
 
 		// 1. VLESS Link Importer Card (Pre-rendering at the top)
-		var importerSection = m.section(form.NamedSection, 'main', 'global', '');
+		var importerSection = m.section(L.cbi.NamedSection, 'main', 'global', '');
 		importerSection.render = function() {
 			return E('div', { 'class': 'mp-card' }, [
 				E('h3', {}, '🔗 Умный импорт VLESS ссылки'),
@@ -48,39 +42,39 @@ return view.extend({
 									var parsed = parseVlessLink(link);
 									
 									// Save to UCI
-									var sid = uci.add('microproxy', 'server');
-									uci.set('microproxy', sid, 'enabled', '1');
-									uci.set('microproxy', sid, 'alias', parsed.alias);
-									uci.set('microproxy', sid, 'type', 'vless');
-									uci.set('microproxy', sid, 'server', parsed.server);
-									uci.set('microproxy', sid, 'server_port', parsed.server_port);
-									uci.set('microproxy', sid, 'uuid', parsed.uuid);
-									uci.set('microproxy', sid, 'flow', parsed.flow);
-									uci.set('microproxy', sid, 'transport', parsed.transport);
-									uci.set('microproxy', sid, 'tls', parsed.tls);
-									uci.set('microproxy', sid, 'server_name', parsed.server_name);
-									uci.set('microproxy', sid, 'public_key', parsed.public_key);
-									uci.set('microproxy', sid, 'short_id', parsed.short_id);
+									var sid = L.uci.add('microproxy', 'server');
+									L.uci.set('microproxy', sid, 'enabled', '1');
+									L.uci.set('microproxy', sid, 'alias', parsed.alias);
+									L.uci.set('microproxy', sid, 'type', 'vless');
+									L.uci.set('microproxy', sid, 'server', parsed.server);
+									L.uci.set('microproxy', sid, 'server_port', parsed.server_port);
+									L.uci.set('microproxy', sid, 'uuid', parsed.uuid);
+									L.uci.set('microproxy', sid, 'flow', parsed.flow);
+									L.uci.set('microproxy', sid, 'transport', parsed.transport);
+									L.uci.set('microproxy', sid, 'tls', parsed.tls);
+									L.uci.set('microproxy', sid, 'server_name', parsed.server_name);
+									L.uci.set('microproxy', sid, 'public_key', parsed.public_key);
+									L.uci.set('microproxy', sid, 'short_id', parsed.short_id);
 									
 									if (parsed.transport === 'xhttp') {
-										uci.set('microproxy', sid, 'xhttp_mode', parsed.xhttp_mode);
-										uci.set('microproxy', sid, 'xhttp_padding', parsed.xhttp_padding);
+										L.uci.set('microproxy', sid, 'xhttp_mode', parsed.xhttp_mode);
+										L.uci.set('microproxy', sid, 'xhttp_padding', parsed.xhttp_padding);
 									}
 
 									ev.target.disabled = true;
 									
-									uci.save().then(function() {
-										return uci.apply();
+									L.uci.save().then(function() {
+										return L.uci.apply();
 									}).then(function() {
-										ui.addNotification('success', E('p', {}, 'Сервер "' + parsed.alias + '" успешно добавлен и настроен!'));
+										L.ui.addNotification('success', E('p', {}, 'Сервер "' + parsed.alias + '" успешно добавлен и настроен!'));
 										textarea.value = '';
 										setTimeout(function() { window.location.reload(); }, 1500);
 									}).catch(function(err) {
-										ui.addNotification('danger', E('p', {}, 'Ошибка UCI: ' + err.message));
+										L.ui.addNotification('danger', E('p', {}, 'Ошибка UCI: ' + err.message));
 										ev.target.disabled = false;
 									});
 								} catch (err) {
-									ui.addNotification('danger', E('p', {}, 'Ошибка парсинга: ' + err.message));
+									L.ui.addNotification('danger', E('p', {}, 'Ошибка парсинга: ' + err.message));
 								}
 							}
 						}, 'Импортировать сервер')
@@ -90,63 +84,63 @@ return view.extend({
 		};
 
 		// 2. Standard Grid Section for CRUD operations
-		var s = m.section(form.GridSection, 'server', 'Список прокси-серверов');
+		var s = m.section(L.cbi.GridSection, 'server', 'Список прокси-серверов');
 		s.anonymous = true;
 		s.addremove = true;
 		s.sortable = true;
 
 		// Server Fields in Table View
-		s.option(form.Flag, 'enabled', 'Вкл.');
+		s.option(L.cbi.Flag, 'enabled', 'Вкл.');
 		
-		var alias = s.option(form.Value, 'alias', 'Название');
+		var alias = s.option(L.cbi.Value, 'alias', 'Название');
 		alias.placeholder = 'My Server';
 		alias.datatype = 'string';
 
-		var host = s.option(form.Value, 'server', 'Адрес');
+		var host = s.option(L.cbi.Value, 'server', 'Адрес');
 		host.datatype = 'host';
 		host.placeholder = '1.2.3.4';
 
-		var port = s.option(form.Value, 'server_port', 'Порт');
+		var port = s.option(L.cbi.Value, 'server_port', 'Порт');
 		port.datatype = 'port';
 		port.placeholder = '443';
 
-		var transport = s.option(form.ListValue, 'transport', 'Транспорт');
+		var transport = s.option(L.cbi.ListValue, 'transport', 'Транспорт');
 		transport.value('tcp', 'TCP');
 		transport.value('xhttp', 'Reality-XHTTP (быстрый)');
 		transport.default = 'tcp';
 
 		// Form detail settings popup (when user clicks "Edit")
-		s.option(form.Value, 'uuid', 'UUID (ID пользователя)').rmempty = false;
-		s.option(form.Value, 'flow', 'Flow (Поток)').value('xtls-rprx-vision', 'xtls-rprx-vision (Рекомендуется для TCP)').rmempty = true;
+		s.option(L.cbi.Value, 'uuid', 'UUID (ID пользователя)').rmempty = false;
+		s.option(L.cbi.Value, 'flow', 'Flow (Поток)').value('xtls-rprx-vision', 'xtls-rprx-vision (Рекомендуется для TCP)').rmempty = true;
 		
-		var tls = s.option(form.Flag, 'tls', 'Включить Reality/TLS');
+		var tls = s.option(L.cbi.Flag, 'tls', 'Включить Reality/TLS');
 		tls.default = '1';
 
-		var sni = s.option(form.Value, 'server_name', 'SNI (Маскировка)');
+		var sni = s.option(L.cbi.Value, 'server_name', 'SNI (Маскировка)');
 		sni.placeholder = 'yahoo.com';
 		sni.depends('tls', '1');
 
-		var pbk = s.option(form.Value, 'public_key', 'Public Key (Публичный ключ)');
+		var pbk = s.option(L.cbi.Value, 'public_key', 'Public Key (Публичный ключ)');
 		pbk.placeholder = 'Reality Public Key';
 		pbk.depends('tls', '1');
 
-		var sid = s.option(form.Value, 'short_id', 'Short ID');
+		var sid = s.option(L.cbi.Value, 'short_id', 'Short ID');
 		sid.placeholder = 'Short ID (Hex)';
 		sid.depends('tls', '1');
 
-		var xm = s.option(form.ListValue, 'xhttp_mode', 'Режим XHTTP');
+		var xm = s.option(L.cbi.ListValue, 'xhttp_mode', 'Режим XHTTP');
 		xm.value('packet', 'packet (Эмуляция UDP-пакетов)');
 		xm.value('stream', 'stream (Потоковый)');
 		xm.depends('transport', 'xhttp');
 		xm.default = 'packet';
 
-		var xp = s.option(form.Value, 'xhttp_padding', 'Размер паддинга XHTTP');
+		var xp = s.option(L.cbi.Value, 'xhttp_padding', 'Размер паддинга XHTTP');
 		xp.placeholder = '100-1000';
 		xp.depends('transport', 'xhttp');
 		xp.default = '100-1000';
 
 		// Ping action button inside grid
-		s.option(form.DummyValue, 'ping', 'Задержка (RTT)').render = function(section_id) {
+		s.option(L.cbi.DummyValue, 'ping', 'Задержка (RTT)').render = function(section_id) {
 			var pingBtn = E('button', {
 				'class': 'mp-btn mp-btn-secondary ping-indicator',
 				'style': 'padding: 0.25rem 0.5rem; font-size: 0.75rem;',
@@ -155,16 +149,15 @@ return view.extend({
 					ev.target.textContent = '...';
 					ev.target.className = 'mp-btn mp-btn-secondary ping-indicator';
 					
-					var serverIp = uci.get('microproxy', section_id, 'server');
+					var serverIp = L.uci.get('microproxy', section_id, 'server');
 					if (!serverIp) {
 						ev.target.textContent = 'Ошибка';
 						return;
 					}
 
-					// Quick ping via fs.exec
-					fs.exec('/bin/ping', ['-c', '3', '-W', '2', serverIp]).then(function(res) {
+					// Quick ping via L.fs.exec
+					L.fs.exec('/bin/ping', ['-c', '3', '-W', '2', serverIp]).then(function(res) {
 						if (res && res.code === 0) {
-							// Extract avg RTT from ping output
 							var match = res.stdout.match(/rtt min\/avg\/max\/mdev = [0-9.]+\/([0-9.]+)/);
 							if (match) {
 								var avg = parseFloat(match[1]);
@@ -236,7 +229,6 @@ function parseVlessLink(link) {
 	var publicKey = params.pbk || '';
 	var shortId = params.sid || '';
 
-	// Smart parameter enforcing for XHTTP
 	var xhttp_mode = '';
 	var xhttp_padding = '';
 	if (transport === 'xhttp') {

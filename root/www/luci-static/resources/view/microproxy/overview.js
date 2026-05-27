@@ -1,24 +1,35 @@
 'use strict';
 'use ui';
 
-var view = require('view');
-var uci = require('uci');
-var rpc = require('rpc');
-var ubus = require('ubus');
-var fs = require('fs');
-var ui = require('ui');
+// RPC declarations using standard L.rpc
+var rpc_list = L.rpc.declare({
+	object: 'service',
+	method: 'list',
+	params: [ 'name' ]
+});
 
-return view.extend({
+var rpc_start = L.rpc.declare({
+	object: 'service',
+	method: 'start',
+	params: [ 'name' ]
+});
+
+var rpc_stop = L.rpc.declare({
+	object: 'service',
+	method: 'stop',
+	params: [ 'name' ]
+});
+
+return L.view.extend({
 	load: function() {
 		return Promise.all([
-			ubus.call('service', 'list', { name: 'microproxy' }),
-			uci.load('microproxy'),
-			fs.read('/var/etc/microproxy/whitelist_ips.list').then(function(res) {
+			rpc_list('microproxy'),
+			L.uci.load('microproxy'),
+			L.fs.read('/var/etc/microproxy/whitelist_ips.list').then(function(res) {
 				return res ? res.trim().split('\n').length : 0;
 			}).catch(function() { return 0; }),
-			fs.exec('/usr/sbin/nft', ['list', 'set', 'inet', 'nft_microproxy', 'dynamic_ips']).then(function(res) {
+			L.fs.exec('/usr/sbin/nft', ['list', 'set', 'inet', 'nft_microproxy', 'dynamic_ips']).then(function(res) {
 				if (res && res.code === 0) {
-					// Parse loaded elements in nftables set
 					var match = res.stdout.match(/elements\s*=\s*\{\s*([^}]+)\s*\}/);
 					if (match) {
 						return match[1].split(',').map(function(s) { return s.trim(); });
@@ -65,15 +76,16 @@ return view.extend({
 							'click': function(ev) {
 								ev.target.disabled = true;
 								var action = running ? 'stop' : 'start';
-								uci.set('microproxy', 'main', 'enabled', running ? '0' : '1');
-								uci.save().then(function() {
-									return uci.apply();
+								L.uci.set('microproxy', 'main', 'enabled', running ? '0' : '1');
+								L.uci.save().then(function() {
+									return L.uci.apply();
 								}).then(function() {
-									return ubus.call('service', action, { name: 'microproxy' });
+									var svcCall = running ? rpc_stop : rpc_start;
+									return svcCall('microproxy');
 								}).then(function() {
 									window.location.reload();
 								}).catch(function(err) {
-									ui.addNotification('danger', E('p', {}, 'Ошибка при управлении службой: ' + err.message));
+									L.ui.addNotification('danger', E('p', {}, 'Ошибка при управлении службой: ' + err.message));
 									ev.target.disabled = false;
 								});
 							}
@@ -82,11 +94,11 @@ return view.extend({
 							'class': 'mp-btn mp-btn-secondary',
 							'click': function(ev) {
 								ev.target.disabled = true;
-								fs.exec('/usr/share/microproxy/update_lists.sh').then(function(res) {
-									ui.addNotification('info', E('p', {}, 'Списки обхода успешно обновлены!'));
+								L.fs.exec('/usr/share/microproxy/update_lists.sh').then(function(res) {
+									L.ui.addNotification('info', E('p', {}, 'Списки обхода успешно обновлены!'));
 									window.location.reload();
 								}).catch(function(err) {
-									ui.addNotification('danger', E('p', {}, 'Ошибка обновления списков: ' + err.message));
+									L.ui.addNotification('danger', E('p', {}, 'Ошибка обновления списков: ' + err.message));
 									ev.target.disabled = false;
 								});
 							}
@@ -101,7 +113,7 @@ return view.extend({
 						E('span', {}, 'Direct-by-Default (Белый список)'),
 						E('br'),
 						E('strong', {}, 'DNS сервер: '),
-						E('span', {}, uci.get('microproxy', 'main', 'integrate_agh') === '1' ? 'AdGuard Home + Sing-box (7913)' : 'Sing-box Core (53)')
+						E('span', {}, L.uci.get('microproxy', 'main', 'integrate_agh') === '1' ? 'AdGuard Home + Sing-box (7913)' : 'Sing-box Core (53)')
 					]),
 					E('div', { 'style': 'padding-left:1rem;' }, [
 						E('strong', {}, 'IP в белом списке: '),
@@ -134,7 +146,7 @@ return view.extend({
 
 							// Protection against RU zone
 							if (domain.endsWith('.ru') || domain.endsWith('.рф')) {
-								ui.addNotification('warning', E('p', {}, 'Внимание! Ресурсы зоны RU не рекомендуется пускать через прокси во избежание блокировок со стороны их антифрод-систем.'));
+								L.ui.addNotification('warning', E('p', {}, 'Внимание! Ресурсы зоны RU не рекомендуется пускать через прокси во избежание блокировок со стороны их антифрод-систем.'));
 								return;
 							}
 
@@ -142,7 +154,7 @@ return view.extend({
 							input.disabled = true;
 
 							// Resolve domain via standard DNS
-							fs.exec('/usr/sbin/nslookup', [domain]).then(function(res) {
+							L.fs.exec('/usr/sbin/nslookup', [domain]).then(function(res) {
 								if (res.code !== 0) {
 									throw new Error('Не удалось разрешить домен в IP!');
 								}
@@ -150,7 +162,7 @@ return view.extend({
 								// Extract IPs using regex
 								var ips = [];
 								var lines = res.stdout.split('\n');
-								for (var i = 2; i < lines.length; i++) { // Skip local DNS server output lines
+								for (var i = 2; i < lines.length; i++) {
 									var match = lines[i].match(/Address:\s*([0-9.]+)/);
 									if (match) {
 										ips.push(match[1]);
@@ -163,18 +175,18 @@ return view.extend({
 
 								// Add each IP to nftables dynamic set
 								var promises = ips.map(function(ip) {
-									return fs.exec('/usr/sbin/nft', ['add', 'element', 'inet', 'nft_microproxy', 'dynamic_ips', '{', ip, 'timeout', '43200s', '}']);
+									return L.fs.exec('/usr/sbin/nft', ['add', 'element', 'inet', 'nft_microproxy', 'dynamic_ips', '{', ip, 'timeout', '43200s', '}']);
 								});
 
 								return Promise.all(promises).then(function() {
 									return ips;
 								});
 							}).then(function(addedIps) {
-								ui.addNotification('success', E('p', {}, 'Домен ' + domain + ' (' + addedIps.join(', ') + ') временно направлен через прокси на 12 часов!'));
+								L.ui.addNotification('success', E('p', {}, 'Домен ' + domain + ' (' + addedIps.join(', ') + ') временно направлен через прокси на 12 часов!'));
 								input.value = '';
 								setTimeout(function() { window.location.reload(); }, 2000);
 							}).catch(function(err) {
-								ui.addNotification('danger', E('p', {}, 'Ошибка добавления: ' + err.message));
+								L.ui.addNotification('danger', E('p', {}, 'Ошибка добавления: ' + err.message));
 								ev.target.disabled = false;
 								input.disabled = false;
 							});
@@ -194,9 +206,8 @@ return view.extend({
 									'style': 'color:#ef4444; text-decoration:none;',
 									'click': function(ev) {
 										ev.preventDefault();
-										// Clear element from set
-										var rawIp = ip.split(' ')[0]; // Strip timeout if any
-										fs.exec('/usr/sbin/nft', ['delete', 'element', 'inet', 'nft_microproxy', 'dynamic_ips', '{', rawIp, '}']).then(function() {
+										var rawIp = ip.split(' ')[0];
+										L.fs.exec('/usr/sbin/nft', ['delete', 'element', 'inet', 'nft_microproxy', 'dynamic_ips', '{', rawIp, '}']).then(function() {
 											window.location.reload();
 										});
 									}
@@ -223,7 +234,7 @@ return view.extend({
 							'class': 'mp-btn mp-btn-secondary',
 							'click': function() {
 								var logArea = document.getElementById('log_output');
-								fs.exec('/usr/sbin/logread', ['-e', 'sing-box']).then(function(res) {
+								L.fs.exec('/usr/sbin/logread', ['-e', 'sing-box']).then(function(res) {
 									logArea.value = (res && res.stdout) ? res.stdout.trim() : 'Логов Sing-box не обнаружено в системном журнале.';
 									logArea.scrollTop = logArea.scrollHeight;
 								});
@@ -238,7 +249,7 @@ return view.extend({
 		setTimeout(function() {
 			var logArea = document.getElementById('log_output');
 			if (logArea) {
-				fs.exec('/usr/sbin/logread', ['-e', 'sing-box']).then(function(res) {
+				L.fs.exec('/usr/sbin/logread', ['-e', 'sing-box']).then(function(res) {
 					logArea.value = (res && res.stdout) ? res.stdout.trim() : 'Логов Sing-box не обнаружено в системном журнале.';
 					logArea.scrollTop = logArea.scrollHeight;
 				});

@@ -3,6 +3,7 @@
 
 chmod +x /etc/init.d/microproxy
 chmod +x /usr/share/microproxy/update_lists.sh
+chmod +x /usr/share/microproxy/update_vless_sub.sh
 
 # Add cron job for daily updates at 3:15 AM
 if ! grep -q "update_lists.sh" /etc/crontabs/root 2>/dev/null; then

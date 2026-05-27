@@ -120,11 +120,12 @@ fi
 download_file() {
 	local src="$1"
 	local dst="$2"
+	local buster=$(date +%s)
 	echo "Downloading $dst..."
 	if which curl >/dev/null 2>&1; then
-		curl -s -L -k -o "$dst" "$REPO_URL/$src"
+		curl -s -L -k -o "$dst" "$REPO_URL/$src?t=$buster"
 	else
-		wget -q -O "$dst" --no-check-certificate "$REPO_URL/$src"
+		wget -q -O "$dst" --no-check-certificate "$REPO_URL/$src?t=$buster"
 	fi
 	if [ $? -ne 0 ]; then
 		echo "Error: Failed to download $src!"

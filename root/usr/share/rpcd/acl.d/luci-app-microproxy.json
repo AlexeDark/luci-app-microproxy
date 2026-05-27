@@ -1,0 +1,27 @@
+{
+	"luci-app-microproxy": {
+		"description": "Grant access to microproxy configuration and service control",
+		"read": {
+			"uci": [ "microproxy", "dhcp" ],
+			"file": {
+				"/var/etc/microproxy/*": [ "read" ]
+			},
+			"ubus": {
+				"service": [ "list", "status" ],
+				"file": [ "read", "list" ]
+			}
+		},
+		"write": {
+			"uci": [ "microproxy", "dhcp" ],
+			"file": {
+				"/var/etc/microproxy/*": [ "write" ],
+				"/usr/share/microproxy/*": [ "exec" ],
+				"/usr/sbin/nft": [ "exec" ]
+			},
+			"ubus": {
+				"service": [ "start", "stop", "reload" ],
+				"file": [ "exec" ]
+			}
+		}
+	}
+}

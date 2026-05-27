@@ -1,0 +1,16 @@
+#!/bin/sh
+# Post-installation defaults for luci-app-microproxy
+
+chmod +x /etc/init.d/microproxy
+chmod +x /usr/share/microproxy/update_lists.sh
+
+# Add cron job for daily updates at 3:15 AM
+if ! grep -q "update_lists.sh" /etc/crontabs/root 2>/dev/null; then
+	echo "15 3 * * * /usr/share/microproxy/update_lists.sh" >> /etc/crontabs/root
+	/etc/init.d/cron restart
+fi
+
+# Clear LuCI compilation cache to ensure the new JS views load instantly
+rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
+
+exit 0

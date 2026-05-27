@@ -1,0 +1,44 @@
+{
+	"admin/services/microproxy": {
+		"title": "MicroProxy",
+		"action": {
+			"type": "alias",
+			"path": "admin/services/microproxy/overview"
+		},
+		"depends": {
+			"acl": [ "luci-app-microproxy" ]
+		}
+	},
+	"admin/services/microproxy/overview": {
+		"title": "Overview",
+		"action": {
+			"type": "view",
+			"path": "microproxy/overview"
+		},
+		"order": 1
+	},
+	"admin/services/microproxy/servers": {
+		"title": "Servers",
+		"action": {
+			"type": "view",
+			"path": "microproxy/servers"
+		},
+		"order": 2
+	},
+	"admin/services/microproxy/routing": {
+		"title": "Routing",
+		"action": {
+			"type": "view",
+			"path": "microproxy/routing"
+		},
+		"order": 3
+	},
+	"admin/services/microproxy/advanced": {
+		"title": "Advanced Settings",
+		"action": {
+			"type": "view",
+			"path": "microproxy/advanced"
+		},
+		"order": 4
+	}
+}

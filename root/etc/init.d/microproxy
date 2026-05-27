@@ -1,0 +1,466 @@
+#!/bin/sh /etc/rc.common
+# Control script for luci-app-microproxy
+# Written by Senior Embedded System Engineer
+
+START=95
+USE_PROCD=1
+
+CONF_DIR="/var/etc/microproxy"
+SB_JSON="$CONF_DIR/sing-box.json"
+NFT_RULES="$CONF_DIR/microproxy.nft"
+
+# Helper: Append to output file
+append_to() {
+	echo "$2" >> "$1"
+}
+
+# Generate Sing-box JSON config
+generate_singbox_config() {
+	local enabled tproxy_port dns_port fakeip_range route_mode integrate_agh
+	
+	config_get_bool enabled "main" enabled 0
+	[ "$enabled" -eq 0 ] && return 1
+	
+	config_get tproxy_port "main" tproxy_port "12345"
+	config_get dns_port "main" dns_port "7913"
+	config_get fakeip_range "main" fakeip_range "198.18.0.0/15"
+	config_get route_mode "main" route_mode "direct_by_default"
+	config_get_bool integrate_agh "main" integrate_agh 0
+	
+	mkdir -p "$CONF_DIR"
+	true > "$SB_JSON"
+	
+	# Start JSON
+	cat <<EOF > "$SB_JSON"
+{
+  "log": {
+    "level": "info",
+    "timestamp": true
+  },
+  "dns": {
+    "servers": [
+      {
+        "tag": "remote-dns",
+        "address": "https://1.1.1.1/dns-query",
+        "detour": "proxy-auto"
+      },
+      {
+        "tag": "local-dns",
+        "address": "8.8.8.8",
+        "detour": "direct"
+      },
+EOF
+
+	# Add dnsmasq upstream if AGH is not integrated
+	if [ "$integrate_agh" -eq 0 ]; then
+		cat <<EOF >> "$SB_JSON"
+      {
+        "tag": "lan-dns",
+        "address": "127.0.0.1",
+        "port": 54,
+        "detour": "direct"
+      },
+EOF
+	fi
+
+	cat <<EOF >> "$SB_JSON"
+      {
+        "tag": "fakeip-dns",
+        "address": "fakeip"
+      }
+    ],
+    "rules": [
+      {
+        "outbound": "any",
+        "server": "local-dns"
+      },
+      {
+        "query_type": [
+          "PTR"
+        ],
+        "server": "lan-dns"
+      },
+EOF
+
+	if [ "$integrate_agh" -eq 0 ]; then
+		cat <<EOF >> "$SB_JSON"
+      {
+        "domain_suffix": [
+          ".lan",
+          ".local"
+        ],
+        "server": "lan-dns"
+      },
+EOF
+	fi
+
+	# Rule-sets for DNS
+	cat <<EOF >> "$SB_JSON"
+      {
+        "rule_set": [
+          "whitelist-domains"
+        ],
+        "server": "fakeip-dns"
+      }
+    ],
+    "fakeip": {
+      "enabled": true,
+      "inet4_range": "$fakeip_range"
+    }
+  },
+  "inbounds": [
+    {
+      "type": "tproxy",
+      "tag": "tproxy-in",
+      "listen": "::",
+      "listen_port": $tproxy_port,
+      "sniff": true,
+      "sniff_override_destination": true
+    }
+  ],
+  "outbounds": [
+EOF
+
+	# Generate Server Outbounds
+	local has_servers=0
+	local server_tags=""
+	
+	parse_server_outbound() {
+		local section="$1"
+		local enabled alias type server server_port uuid flow transport tls server_name public_key short_id xhttp_mode xhttp_padding
+		
+		config_get_bool enabled "$section" enabled 0
+		[ "$enabled" -eq 0 ] && return
+		
+		config_get alias "$section" alias
+		config_get type "$section" type "vless"
+		config_get server "$section" server
+		config_get server_port "$section" server_port "443"
+		config_get uuid "$section" uuid
+		config_get flow "$section" flow
+		config_get transport "$section" transport "tcp"
+		config_get_bool tls "$section" tls 1
+		config_get server_name "$section" server_name
+		config_get public_key "$section" public_key
+		config_get short_id "$section" short_id
+		
+		local tag="proxy-$section"
+		server_tags="$server_tags\"$tag\","
+		has_servers=1
+		
+		# VLESS Outbound formatting
+		cat <<EOF >> "$SB_JSON"
+    {
+      "type": "vless",
+      "tag": "$tag",
+      "server": "$server",
+      "server_port": $server_port,
+      "uuid": "$uuid",
+EOF
+		if [ -n "$flow" ]; then
+			echo "      \"flow\": \"$flow\"," >> "$SB_JSON"
+		fi
+		
+		if [ "$tls" -eq 1 ]; then
+			cat <<EOF >> "$SB_JSON"
+      "tls": {
+        "enabled": true,
+        "server_name": "$server_name",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        },
+        "reality": {
+          "enabled": true,
+          "public_key": "$public_key",
+          "short_id": "$short_id"
+        }
+      },
+EOF
+		fi
+		
+		# Transport layer formatting
+		if [ "$transport" = "xhttp" ]; then
+			config_get xhttp_mode "$section" xhttp_mode "packet"
+			config_get xhttp_padding "$section" xhttp_padding "100-1000"
+			cat <<EOF >> "$SB_JSON"
+      "transport": {
+        "type": "xhttp",
+        "host": "$server_name",
+        "mode": "$xhttp_mode",
+        "x_padding_bytes": "$xhttp_padding"
+      }
+EOF
+		else
+			cat <<EOF >> "$SB_JSON"
+      "transport": {
+        "type": "tcp"
+      }
+EOF
+		fi
+		
+		echo "    }," >> "$SB_JSON"
+	}
+	
+	config_foreach parse_server_outbound "server"
+	
+	if [ "$has_servers" -eq 0 ]; then
+		echo "Error: No active servers configured!"
+		return 1
+	fi
+	
+	# Strip trailing comma from server_tags
+	server_tags="${server_tags%,}"
+	
+	# Global Observatory config
+	local obs_enabled obs_interval obs_url obs_tolerance
+	config_get_bool obs_enabled "config" enabled 1
+	config_get obs_interval "config" interval "5m"
+	config_get obs_url "config" probe_url "https://www.gstatic.com/generate_204"
+	config_get obs_tolerance "config" tolerance "50"
+	
+	# Output observatory & urltest outbounds
+	cat <<EOF >> "$SB_JSON"
+    {
+      "type": "urltest",
+      "tag": "proxy-auto",
+      "outbounds": [ $server_tags ],
+      "observatory_tag": "observatory",
+      "interval": "$obs_interval",
+      "tolerance": $obs_tolerance
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    },
+    {
+      "type": "dns",
+      "tag": "dns-out"
+    },
+    {
+      "type": "block",
+      "tag": "block"
+    }
+  ],
+  "route": {
+    "rules": [
+      {
+        "query_type": [
+          "A",
+          "AAAA"
+        ],
+        "outbound": "dns-out"
+      },
+      {
+        "ip_is_private": true,
+        "outbound": "direct"
+      },
+      {
+        "rule_set": "whitelist-domains",
+        "outbound": "proxy-auto"
+      },
+EOF
+
+	# Dynamic rule-set scanning (for extra compilation packages)
+	local srs_files=$(ls "$CONF_DIR"/*.srs 2>/dev/null)
+	for srs in $srs_files; do
+		local srs_name=$(basename "$srs" .srs)
+		cat <<EOF >> "$SB_JSON"
+      {
+        "rule_set": "$srs_name",
+        "outbound": "proxy-auto"
+      },
+EOF
+	done
+
+	cat <<EOF >> "$SB_JSON"
+      {
+        "inbound": [
+          "tproxy-in"
+        ],
+        "outbound": "proxy-auto"
+      }
+    ],
+    "rule_set": [
+      {
+        "tag": "whitelist-domains",
+        "type": "local",
+        "format": "source",
+        "path": "$CONF_DIR/whitelist_domains.json"
+      }
+EOF
+
+	for srs in $srs_files; do
+		local srs_name=$(basename "$srs" .srs)
+		cat <<EOF >> "$SB_JSON"
+      ,
+      {
+        "tag": "$srs_name",
+        "type": "local",
+        "format": "binary",
+        "path": "$srs"
+      }
+EOF
+	done
+
+	cat <<EOF >> "$SB_JSON"
+    ]
+  },
+  "observatory": {
+    "enable": $obs_enabled,
+    "probe_url": "$obs_url",
+    "interval": "$obs_interval"
+  }
+}
+EOF
+	return 0
+}
+
+# Generate nftables configuration file
+generate_nft_rules() {
+	local tproxy_port fakeip_range integrate_agh
+	config_get tproxy_port "main" tproxy_port "12345"
+	config_get fakeip_range "main" fakeip_range "198.18.0.0/15"
+	config_get_bool integrate_agh "main" integrate_agh 0
+	
+	local local_dns_port="53"
+	[ "$integrate_agh" -eq 1 ] && local_dns_port="7913"
+	
+	true > "$NFT_RULES"
+	
+	cat <<EOF > "$NFT_RULES"
+table inet nft_microproxy {
+	set whitelist_ips {
+		type ipv4_addr
+		flags interval
+	}
+
+	set dynamic_ips {
+		type ipv4_addr
+		flags timeout
+	}
+
+	chain prerouting {
+		type filter hook prerouting priority mangle; policy accept;
+
+		# Bypass private networks
+		ip daddr { 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 224.0.0.0/4, 255.255.255.255/32 } accept
+
+		# Intercept Fake-IP range (198.18.0.0/15)
+		ip daddr $fakeip_range tproxy to :$tproxy_port meta mark set 1 accept
+
+		# Intercept Whitelisted IPs
+		ip daddr @whitelist_ips tproxy to :$tproxy_port meta mark set 1 accept
+
+		# Intercept Dynamic IPs
+		ip daddr @dynamic_ips tproxy to :$tproxy_port meta mark set 1 accept
+	}
+
+	chain output {
+		type route hook output priority mangle; policy accept;
+
+		# Bypass private networks
+		ip daddr { 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 224.0.0.0/4, 255.255.255.255/32 } accept
+
+		# Mark Fake-IP and Whitelist traffic for local router redirection
+		ip daddr $fakeip_range meta mark set 1 accept
+		ip daddr @whitelist_ips meta mark set 1 accept
+		ip daddr @dynamic_ips meta mark set 1 accept
+	}
+
+	chain dstnat {
+		type nat hook prerouting priority dstnat; policy accept;
+
+		# Intercept local client DNS requests and force them to local resolver
+		udp dport 53 redirect to :$local_dns_port
+		tcp dport 53 redirect to :$local_dns_port
+	}
+}
+EOF
+}
+
+setup_network() {
+	echo "Setting up network routing rules..."
+	# Create table 100 for TPROXY local routing
+	ip rule add fwmark 1 lookup 100 2>/dev/null
+	ip route add local default dev lo table 100 2>/dev/null
+	
+	# Load nftables ruleset atomically
+	if [ -f "$NFT_RULES" ]; then
+		nft -f "$NFT_RULES"
+	fi
+	
+	# Load Whitelisted IPs into nftables set if list exists
+	if [ -f "$CONF_DIR/whitelist_ips.list" ]; then
+		while read -r ip; do
+			[ -n "$ip" ] && nft add element inet nft_microproxy whitelist_ips { "$ip" }
+		done < "$CONF_DIR/whitelist_ips.list"
+	fi
+}
+
+clear_network() {
+	echo "Clearing network routing rules..."
+	ip rule del fwmark 1 lookup 100 2>/dev/null
+	ip route del local default dev lo table 100 2>/dev/null
+	
+	# Delete nftables table
+	nft delete table inet nft_microproxy 2>/dev/null
+}
+
+start_service() {
+	config_load microproxy
+	
+	local enabled integrate_agh dns_port
+	config_get_bool enabled "main" enabled 0
+	[ "$enabled" -eq 0 ] && return
+	
+	config_get_bool integrate_agh "main" integrate_agh 0
+	config_get dns_port "main" dns_port "7913"
+	
+	# 1. Download/Parse/Compile subscriptions if not already done
+	if [ ! -f "$CONF_DIR/whitelist_domains.json" ]; then
+		/usr/share/microproxy/update_lists.sh
+	fi
+	
+	# 2. Generate JSON config
+	if ! generate_singbox_config; then
+		echo "Sing-box config generation failed!"
+		return 1
+	fi
+	
+	# 3. Generate and apply nftables rules
+	generate_nft_rules
+	setup_network
+	
+	# 4. Handle dnsmasq shift if AGH is not integrated (Sing-box takes port 53)
+	if [ "$integrate_agh" -eq 0 ]; then
+		echo "Shifting dnsmasq port to 54..."
+		uci set dhcp.@dnsmasq[0].port='54'
+		uci commit dhcp
+		/etc/init.d/dnsmasq restart
+	fi
+	
+	# 5. Start Sing-box via procd
+	procd_open_instance "main"
+	procd_set_param command /usr/sbin/sing-box run -c "$SB_JSON"
+	procd_set_param respawn
+	procd_set_param stdout 1
+	procd_set_param stderr 1
+	procd_close_instance
+}
+
+stop_service() {
+	clear_network
+	
+	# Restore dnsmasq port to 53 if it was shifted
+	if uci get dhcp.@dnsmasq[0].port | grep -q "54"; then
+		echo "Restoring dnsmasq port to 53..."
+		uci set dhcp.@dnsmasq[0].port='53'
+		uci commit dhcp
+		/etc/init.d/dnsmasq restart
+	fi
+}
+
+service_triggers() {
+	procd_add_reload_trigger "microproxy"
+}

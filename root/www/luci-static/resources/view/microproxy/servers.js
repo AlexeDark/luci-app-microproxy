@@ -115,10 +115,15 @@ return L.view.extend({
 		transport.default = 'tcp';
 
 		// Form detail settings popup (when user clicks "Edit")
-		s.option(form.Value, 'uuid', 'UUID (ID пользователя)').rmempty = false;
-		s.option(form.Value, 'flow', 'Flow (Поток)').value('xtls-rprx-vision', 'xtls-rprx-vision (Рекомендуется для TCP)').rmempty = true;
+		var uuid = s.option(form.Value, 'uuid', 'UUID (ID пользователя)');
+		uuid.rmempty = false;
+
+		var flow = s.option(form.Value, 'flow', 'Flow (Поток)');
+		flow.value('xtls-rprx-vision', 'xtls-rprx-vision (Рекомендуется для TCP)');
+		flow.rmempty = true;
 		
 		var tls = s.option(form.Flag, 'tls', 'Включить Reality/TLS');
+
 		tls.default = '1';
 
 		var sni = s.option(form.Value, 'server_name', 'SNI (Маскировка)');

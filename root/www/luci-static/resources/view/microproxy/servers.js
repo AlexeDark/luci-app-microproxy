@@ -211,36 +211,45 @@ return L.view.extend({
 		// Form detail settings popup (when user clicks "Edit")
 		var uuid = s.option(form.Value, 'uuid', 'UUID (ID пользователя)');
 		uuid.rmempty = false;
+		uuid.modalonly = true;
 
 		var flow = s.option(form.Value, 'flow', 'Flow (Поток)');
 		flow.value('xtls-rprx-vision', 'xtls-rprx-vision (Рекомендуется для TCP)');
 		flow.rmempty = true;
+		flow.modalonly = true;
 		
 		var tls = s.option(form.Flag, 'tls', 'Включить Reality/TLS');
 		tls.default = '1';
+		tls.modalonly = true;
 
 		var sni = s.option(form.Value, 'server_name', 'SNI (Маскировка)');
 		sni.placeholder = 'yahoo.com';
 		sni.depends('tls', '1');
+		sni.modalonly = true;
 
 		var pbk = s.option(form.Value, 'public_key', 'Public Key (Публичный ключ)');
 		pbk.placeholder = 'Reality Public Key';
 		pbk.depends('tls', '1');
+		pbk.modalonly = true;
 
 		var sid = s.option(form.Value, 'short_id', 'Short ID');
 		sid.placeholder = 'Short ID (Hex)';
 		sid.depends('tls', '1');
+		sid.modalonly = true;
 
 		var xm = s.option(form.ListValue, 'xhttp_mode', 'Режим XHTTP');
 		xm.value('packet', 'packet (Эмуляция UDP-пакетов)');
 		xm.value('stream', 'stream (Потоковый)');
 		xm.depends('transport', 'xhttp');
 		xm.default = 'packet';
+		xm.modalonly = true;
 
 		var xp = s.option(form.Value, 'xhttp_padding', 'Размер паддинга XHTTP');
 		xp.placeholder = '100-1000';
 		xp.depends('transport', 'xhttp');
 		xp.default = '100-1000';
+		xp.modalonly = true;
+
 
 		// Ping action button inside grid
 		s.option(form.DummyValue, 'ping', 'Задержка (RTT)').render = function(section_id) {

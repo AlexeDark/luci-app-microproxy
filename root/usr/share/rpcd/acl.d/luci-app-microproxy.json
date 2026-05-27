@@ -16,7 +16,11 @@
 			"file": {
 				"/var/etc/microproxy/*": [ "write" ],
 				"/usr/share/microproxy/*": [ "exec" ],
-				"/usr/sbin/nft": [ "exec" ]
+				"/usr/sbin/nft": [ "exec" ],
+				"/usr/bin/curl": [ "exec" ],
+				"/usr/bin/nslookup": [ "exec" ],
+				"/sbin/logread": [ "exec" ],
+				"/bin/ping": [ "exec" ]
 			},
 			"ubus": {
 				"service": [ "start", "stop", "reload" ],

@@ -17,8 +17,103 @@ fi
 echo "Updating package repository..."
 opkg update
 
-echo "Installing system dependencies (sing-box, nftables, curl)..."
-opkg install sing-box nftables curl
+echo "Installing base system dependencies (nftables, curl)..."
+opkg install nftables curl
+
+# Try to install default sing-box package to ensure any system configurations are created
+opkg install sing-box
+
+# Upgrade Sing-box if missing or too old (< 1.9.0)
+SB_VER_NEED="1.9.3"
+SB_UPGRADE=0
+
+if ! which sing-box >/dev/null 2>&1; then
+	echo "Sing-box is not installed."
+	SB_UPGRADE=1
+else
+	SB_CURRENT_VER=$(sing-box version 2>&1 | grep -o -E "version [0-9.]+" | cut -d' ' -f2 | head -n1)
+	echo "Current Sing-box version: $SB_CURRENT_VER"
+	
+	MAJOR=$(echo "$SB_CURRENT_VER" | cut -d'.' -f1)
+	MINOR=$(echo "$SB_CURRENT_VER" | cut -d'.' -f2)
+	
+	if [ -z "$MAJOR" ] || [ -z "$MINOR" ]; then
+		SB_UPGRADE=1
+	elif [ "$MAJOR" -lt 1 ]; then
+		SB_UPGRADE=1
+	elif [ "$MAJOR" -eq 1 ] && [ "$MINOR" -lt 9 ]; then
+		SB_UPGRADE=1
+	fi
+fi
+
+if [ "$SB_UPGRADE" -eq 1 ]; then
+	echo "Your system has an outdated or missing Sing-box version (< 1.9.0)."
+	ARCH=$(uname -m)
+	SB_ARCH=""
+	case "$ARCH" in
+		x86_64)
+			SB_ARCH="amd64"
+			;;
+		aarch64|arm64)
+			SB_ARCH="arm64"
+			;;
+		armv7*)
+			SB_ARCH="armv7"
+			;;
+		mips)
+			SB_ARCH="mips"
+			;;
+		mipsel)
+			SB_ARCH="mipsle"
+			;;
+		*)
+			OPKG_ARCH=$(opkg print-architecture | awk 'NR==1 {print $2}')
+			case "$OPKG_ARCH" in
+				x86_64) SB_ARCH="amd64" ;;
+				aarch64*|arm64*) SB_ARCH="arm64" ;;
+				arm_cortex*) SB_ARCH="armv7" ;;
+				mipsel*) SB_ARCH="mipsle" ;;
+				mips*) SB_ARCH="mips" ;;
+			esac
+			;;
+	esac
+	
+	if [ -n "$SB_ARCH" ]; then
+		tar_file="sing-box-${SB_VER_NEED}-linux-${SB_ARCH}.tar.gz"
+		url="https://github.com/SagerNet/sing-box/releases/download/v${SB_VER_NEED}/${tar_file}"
+		echo "Downloading official Sing-box ($SB_ARCH) v${SB_VER_NEED}..."
+		if which curl >/dev/null 2>&1; then
+			curl -s -L -k -o "/tmp/$tar_file" "$url"
+		else
+			wget -q -O "/tmp/$tar_file" --no-check-certificate "$url"
+		fi
+		
+		if [ $? -eq 0 ] && [ -f "/tmp/$tar_file" ]; then
+			echo "Extracting Sing-box binary..."
+			mkdir -p /tmp/sb_extract
+			tar -C /tmp/sb_extract -zxf "/tmp/$tar_file" 2>/dev/null
+			
+			local_sb="/tmp/sb_extract/sing-box-${SB_VER_NEED}-linux-${SB_ARCH}/sing-box"
+			if [ -f "$local_sb" ]; then
+				sb_path="/usr/bin/sing-box"
+				if [ -f "/usr/sbin/sing-box" ]; then
+					sb_path="/usr/sbin/sing-box"
+				fi
+				echo "Installing official Sing-box binary to $sb_path..."
+				mv "$local_sb" "$sb_path"
+				chmod +x "$sb_path"
+				echo "Sing-box successfully upgraded!"
+			else
+				echo "Error: Extract failed, binary not found."
+			fi
+			rm -rf /tmp/sb_extract "/tmp/$tar_file"
+		else
+			echo "Warning: Failed to download official Sing-box binary. Keeping opkg version."
+		fi
+	else
+		echo "Warning: Unsupported architecture ($ARCH) for official precompiled binary upgrade."
+	fi
+fi
 
 
 # Download utility helper

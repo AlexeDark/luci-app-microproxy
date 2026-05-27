@@ -34,7 +34,7 @@ generate_singbox_config() {
 	cat <<EOF > "$SB_JSON"
 {
   "log": {
-    "level": "info",
+    "level": "debug",
     "timestamp": true
   },
   "dns": {

@@ -28,8 +28,8 @@ get_query_val() {
 
 url_decode() {
 	local val="$1"
-	# Replace URL hex encodings like %20, %23 using printf
-	printf '%b' "${val//%/\\x}" 2>/dev/null || echo "$val"
+	local prep=$(echo "$val" | sed 's/+/ /g;s/%\([0-9a-fA-F][0-9a-fA-F]\)/\\x\1/g')
+	printf "%b" "$prep"
 }
 
 # Parse a single vless:// link and write to UCI
@@ -53,12 +53,34 @@ parse_vless_link() {
 	local rest="${raw#*@}"
 	
 	# Extract server & port (between '@' and '?')
-	local server_port="${rest%%\?*}"
-	local query="${rest#*\?}"
+	local server_port=""
+	local query=""
+	if [ "$rest" != "${rest%\?*}" ]; then
+		server_port="${rest%%\?*}"
+		query="${rest#*\?}"
+	else
+		server_port="$rest"
+	fi
 	
-	local server="${server_port%%:*}"
-	local port="${server_port#*:}"
-	[ "$port" = "$server" ] && port="443" # default fallback
+	local server=""
+	local port="443"
+	if echo "$server_port" | grep -q "\]"; then
+		# IPv6 address in brackets, e.g. [2001:db8::1]:443 or [2001:db8::1]
+		server=$(echo "$server_port" | cut -d']' -f1 | tr -d '[')
+		local port_part=$(echo "$server_port" | cut -d']' -f2)
+		if [ -n "$port_part" ]; then
+			port="${port_part#:}"
+		fi
+	else
+		# IPv4 or domain, e.g. 1.2.3.4:443 or domain.com:443 or domain.com
+		if echo "$server_port" | grep -q ":"; then
+			server="${server_port%%:*}"
+			port="${server_port#*:}"
+		else
+			server="$server_port"
+			port="443"
+		fi
+	fi
 	
 	# Parse query params
 	local flow="" transport="tcp" tls="0" sni="" pbk="" sid=""
@@ -139,7 +161,19 @@ update_subscription() {
 	fi
 	
 	# 2. Decode Base64 if needed
-	local decoded_data=$(decode_base64 "$raw_data")
+	local decoded_data=""
+	if echo "$raw_data" | grep -q "^vless://"; then
+		echo "Subscription data is plain text."
+		decoded_data="$raw_data"
+	else
+		echo "Subscription data appears to be Base64 encoded. Decoding..."
+		decoded_data=$(decode_base64 "$raw_data")
+		if [ -z "$decoded_data" ] || ! echo "$decoded_data" | grep -q "vless://"; then
+			echo "Base64 decoding failed or no vless:// links found. Falling back to raw data."
+			decoded_data="$raw_data"
+		fi
+	fi
+	
 	
 	# 3. Clean up previously imported servers of this group
 	delete_old_servers "$section"

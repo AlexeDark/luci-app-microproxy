@@ -13,10 +13,10 @@ return L.view.extend({
 		css.href = '/luci-static/resources/microproxy.css';
 		document.head.appendChild(css);
 
-		var m = new L.cbi.Map('microproxy', 'Прокси-серверы', 'Добавление и редактирование серверов VLESS Reality (TCP / XHTTP).');
+		var m = new L.form.Map('microproxy', 'Прокси-серверы', 'Добавление и редактирование серверов VLESS Reality (TCP / XHTTP).');
 
 		// 1. VLESS Link Importer Card (Pre-rendering at the top)
-		var importerSection = m.section(L.cbi.NamedSection, 'main', 'global', '');
+		var importerSection = m.section(L.form.NamedSection, 'main', 'global', '');
 		importerSection.render = function() {
 			return E('div', { 'class': 'mp-card' }, [
 				E('h3', {}, '🔗 Умный импорт VLESS ссылки'),
@@ -84,63 +84,63 @@ return L.view.extend({
 		};
 
 		// 2. Standard Grid Section for CRUD operations
-		var s = m.section(L.cbi.GridSection, 'server', 'Список прокси-серверов');
+		var s = m.section(L.form.GridSection, 'server', 'Список прокси-серверов');
 		s.anonymous = true;
 		s.addremove = true;
 		s.sortable = true;
 
 		// Server Fields in Table View
-		s.option(L.cbi.Flag, 'enabled', 'Вкл.');
+		s.option(L.form.Flag, 'enabled', 'Вкл.');
 		
-		var alias = s.option(L.cbi.Value, 'alias', 'Название');
+		var alias = s.option(L.form.Value, 'alias', 'Название');
 		alias.placeholder = 'My Server';
 		alias.datatype = 'string';
 
-		var host = s.option(L.cbi.Value, 'server', 'Адрес');
+		var host = s.option(L.form.Value, 'server', 'Адрес');
 		host.datatype = 'host';
 		host.placeholder = '1.2.3.4';
 
-		var port = s.option(L.cbi.Value, 'server_port', 'Порт');
+		var port = s.option(L.form.Value, 'server_port', 'Порт');
 		port.datatype = 'port';
 		port.placeholder = '443';
 
-		var transport = s.option(L.cbi.ListValue, 'transport', 'Транспорт');
+		var transport = s.option(L.form.ListValue, 'transport', 'Транспорт');
 		transport.value('tcp', 'TCP');
 		transport.value('xhttp', 'Reality-XHTTP (быстрый)');
 		transport.default = 'tcp';
 
 		// Form detail settings popup (when user clicks "Edit")
-		s.option(L.cbi.Value, 'uuid', 'UUID (ID пользователя)').rmempty = false;
-		s.option(L.cbi.Value, 'flow', 'Flow (Поток)').value('xtls-rprx-vision', 'xtls-rprx-vision (Рекомендуется для TCP)').rmempty = true;
+		s.option(L.form.Value, 'uuid', 'UUID (ID пользователя)').rmempty = false;
+		s.option(L.form.Value, 'flow', 'Flow (Поток)').value('xtls-rprx-vision', 'xtls-rprx-vision (Рекомендуется для TCP)').rmempty = true;
 		
-		var tls = s.option(L.cbi.Flag, 'tls', 'Включить Reality/TLS');
+		var tls = s.option(L.form.Flag, 'tls', 'Включить Reality/TLS');
 		tls.default = '1';
 
-		var sni = s.option(L.cbi.Value, 'server_name', 'SNI (Маскировка)');
+		var sni = s.option(L.form.Value, 'server_name', 'SNI (Маскировка)');
 		sni.placeholder = 'yahoo.com';
 		sni.depends('tls', '1');
 
-		var pbk = s.option(L.cbi.Value, 'public_key', 'Public Key (Публичный ключ)');
+		var pbk = s.option(L.form.Value, 'public_key', 'Public Key (Публичный ключ)');
 		pbk.placeholder = 'Reality Public Key';
 		pbk.depends('tls', '1');
 
-		var sid = s.option(L.cbi.Value, 'short_id', 'Short ID');
+		var sid = s.option(L.form.Value, 'short_id', 'Short ID');
 		sid.placeholder = 'Short ID (Hex)';
 		sid.depends('tls', '1');
 
-		var xm = s.option(L.cbi.ListValue, 'xhttp_mode', 'Режим XHTTP');
+		var xm = s.option(L.form.ListValue, 'xhttp_mode', 'Режим XHTTP');
 		xm.value('packet', 'packet (Эмуляция UDP-пакетов)');
 		xm.value('stream', 'stream (Потоковый)');
 		xm.depends('transport', 'xhttp');
 		xm.default = 'packet';
 
-		var xp = s.option(L.cbi.Value, 'xhttp_padding', 'Размер паддинга XHTTP');
+		var xp = s.option(L.form.Value, 'xhttp_padding', 'Размер паддинга XHTTP');
 		xp.placeholder = '100-1000';
 		xp.depends('transport', 'xhttp');
 		xp.default = '100-1000';
 
 		// Ping action button inside grid
-		s.option(L.cbi.DummyValue, 'ping', 'Задержка (RTT)').render = function(section_id) {
+		s.option(L.form.DummyValue, 'ping', 'Задержка (RTT)').render = function(section_id) {
 			var pingBtn = E('button', {
 				'class': 'mp-btn mp-btn-secondary ping-indicator',
 				'style': 'padding: 0.25rem 0.5rem; font-size: 0.75rem;',

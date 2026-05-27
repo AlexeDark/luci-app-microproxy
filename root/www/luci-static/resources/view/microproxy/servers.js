@@ -18,71 +18,165 @@ return L.view.extend({
 		css.href = '/luci-static/resources/microproxy.css';
 		document.head.appendChild(css);
 
-		var m = new form.Map('microproxy', 'Прокси-серверы', 'Добавление и редактирование серверов VLESS Reality (TCP / XHTTP).');
+		var m = new form.Map('microproxy', 'Прокси-серверы', 'Добавление, редактирование и групповой импорт серверов VLESS Reality (TCP / XHTTP).');
 
-		// 1. VLESS Link Importer Card (Pre-rendering at the top)
+		// 1. Dual-Import Card (Single Link + Subscription URL)
 		var importerSection = m.section(form.NamedSection, 'main', 'global', '');
 		importerSection.render = function() {
 			return E('div', { 'class': 'mp-card' }, [
-				E('h3', {}, '🔗 Умный импорт VLESS ссылки'),
+				E('h3', {}, '📥 Быстрое добавление серверов'),
 				E('p', { 'style': 'color:#64748b; font-size:0.9rem;' },
-					'Вставьте vless:// ссылку в поле ниже. Умный парсер автоматически извлечет все Reality параметры (SNI, Public Key, Short ID, Flow). Если ссылка использует транспорт XHTTP, плагин принудительно включит режим "packet" и padding-маскировку для обхода систем глубокого анализа пакетов ТСПУ.'
+					'Выберите удобный способ добавления: импортируйте одиночную vless:// ссылку или вставьте URL подписки от вашего провайдера (обычный текст или Base64). Скрипт автоматически добавит все найденные серверы.'
 				),
-				E('div', { 'style': 'display:flex; flex-direction:column; gap:0.75rem; margin-top:1rem;' }, [
-					E('textarea', {
-						'id': 'vless_link_input',
-						'rows': 3,
-						'placeholder': 'vless://uuid@host:port?security=reality&sni=...#MyServer',
-						'style': 'width:100%; border-radius:12px; padding:0.75rem; border:1px solid #cbd5e1; outline:none; font-family:monospace; font-size:0.8rem;'
-					}),
-					E('div', { 'style': 'display:flex; justify-content:flex-end;' }, [
-						E('button', {
-							'class': 'mp-btn mp-btn-primary',
-							'click': function(ev) {
-								var textarea = document.getElementById('vless_link_input');
-								var link = textarea.value.trim();
-								if (!link) return;
+				
+				E('div', { 'style': 'display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:2rem; margin-top:1.5rem;' }, [
+					
+					// Column 1: Single Link Importer
+					E('div', { 'style': 'border-right: 1px solid rgba(128, 128, 128, 0.15); padding-right: 1.5rem;' }, [
+						E('h4', { 'style': 'margin-bottom: 0.5rem;' }, '🔗 Импорт одиночной ссылки'),
+						E('textarea', {
+							'id': 'vless_link_input',
+							'rows': 3,
+							'placeholder': 'vless://uuid@host:port?security=reality&sni=...#MyServer',
+							'style': 'width:100%; border-radius:10px; padding:0.5rem 0.75rem; border:1px solid rgba(128,128,128,0.25); background:rgba(128,128,128,0.08); color:inherit; outline:none; font-family:monospace; font-size:0.8rem; resize:none;'
+						}),
+						E('div', { 'style': 'display:flex; justify-content:flex-end; margin-top:0.75rem;' }, [
+							E('button', {
+								'class': 'mp-btn mp-btn-primary',
+								'style': 'padding: 0.5rem 1rem; font-size: 0.85rem;',
+								'click': function(ev) {
+									var textarea = document.getElementById('vless_link_input');
+									var link = textarea.value.trim();
+									if (!link) return;
 
-								try {
-									var parsed = parseVlessLink(link);
-									
-									// Save to UCI
-									var sid = L.uci.add('microproxy', 'server');
-									L.uci.set('microproxy', sid, 'enabled', '1');
-									L.uci.set('microproxy', sid, 'alias', parsed.alias);
-									L.uci.set('microproxy', sid, 'type', 'vless');
-									L.uci.set('microproxy', sid, 'server', parsed.server);
-									L.uci.set('microproxy', sid, 'server_port', parsed.server_port);
-									L.uci.set('microproxy', sid, 'uuid', parsed.uuid);
-									L.uci.set('microproxy', sid, 'flow', parsed.flow);
-									L.uci.set('microproxy', sid, 'transport', parsed.transport);
-									L.uci.set('microproxy', sid, 'tls', parsed.tls);
-									L.uci.set('microproxy', sid, 'server_name', parsed.server_name);
-									L.uci.set('microproxy', sid, 'public_key', parsed.public_key);
-									L.uci.set('microproxy', sid, 'short_id', parsed.short_id);
-									
-									if (parsed.transport === 'xhttp') {
-										L.uci.set('microproxy', sid, 'xhttp_mode', parsed.xhttp_mode);
-										L.uci.set('microproxy', sid, 'xhttp_padding', parsed.xhttp_padding);
+									try {
+										var parsed = parseVlessLink(link);
+										
+										var sid = L.uci.add('microproxy', 'server');
+										L.uci.set('microproxy', sid, 'enabled', '1');
+										L.uci.set('microproxy', sid, 'alias', parsed.alias);
+										L.uci.set('microproxy', sid, 'type', 'vless');
+										L.uci.set('microproxy', sid, 'server', parsed.server);
+										L.uci.set('microproxy', sid, 'server_port', parsed.server_port);
+										L.uci.set('microproxy', sid, 'uuid', parsed.uuid);
+										L.uci.set('microproxy', sid, 'flow', parsed.flow);
+										L.uci.set('microproxy', sid, 'transport', parsed.transport);
+										L.uci.set('microproxy', sid, 'tls', parsed.tls);
+										L.uci.set('microproxy', sid, 'server_name', parsed.server_name);
+										L.uci.set('microproxy', sid, 'public_key', parsed.public_key);
+										L.uci.set('microproxy', sid, 'short_id', parsed.short_id);
+										
+										if (parsed.transport === 'xhttp') {
+											L.uci.set('microproxy', sid, 'xhttp_mode', parsed.xhttp_mode);
+											L.uci.set('microproxy', sid, 'xhttp_padding', parsed.xhttp_padding);
+										}
+
+										ev.target.disabled = true;
+										
+										L.uci.save().then(function() {
+											return L.uci.apply();
+										}).then(function() {
+											L.ui.addNotification('success', E('p', {}, 'Сервер "' + parsed.alias + '" успешно добавлен!'));
+											textarea.value = '';
+											setTimeout(function() { window.location.reload(); }, 1500);
+										}).catch(function(err) {
+											L.ui.addNotification('danger', E('p', {}, 'Ошибка UCI: ' + err.message));
+											ev.target.disabled = false;
+										});
+									} catch (err) {
+										L.ui.addNotification('danger', E('p', {}, 'Ошибка парсинга: ' + err.message));
 									}
+								}
+							}, 'Импортировать ссылку')
+						])
+					]),
+					
+					// Column 2: Subscription URL Importer
+					E('div', {}, [
+						E('h4', { 'style': 'margin-bottom: 0.5rem;' }, '📥 Импорт подписки по URL'),
+						E('input', {
+							'id': 'vless_sub_input',
+							'type': 'text',
+							'placeholder': 'https://my-vpn-provider.com/sub/xyz123',
+							'style': 'width:100%; border-radius:10px; padding:0.5rem 0.75rem; border:1px solid rgba(128,128,128,0.25); background:rgba(128,128,128,0.08); color:inherit; outline:none; font-size:0.85rem;'
+						}),
+						E('p', { 'style': 'color:#64748b; font-size:0.75rem; margin-top:0.5rem;' }, 'Поддерживаются URL-адреса, возвращающие текстовые списки или Base64-код.'),
+						E('div', { 'style': 'display:flex; justify-content:flex-end; margin-top:0.75rem;' }, [
+							E('button', {
+								'class': 'mp-btn mp-btn-primary',
+								'style': 'padding: 0.5rem 1rem; font-size: 0.85rem;',
+								'click': function(ev) {
+									var input = document.getElementById('vless_sub_input');
+									var url = input.value.trim();
+									if (!url) return;
 
 									ev.target.disabled = true;
-									
-									L.uci.save().then(function() {
-										return L.uci.apply();
-									}).then(function() {
-										L.ui.addNotification('success', E('p', {}, 'Сервер "' + parsed.alias + '" успешно добавлен и настроен!'));
-										textarea.value = '';
-										setTimeout(function() { window.location.reload(); }, 1500);
+									input.disabled = true;
+
+									L.ui.addNotification('info', E('p', {}, 'Загрузка списка серверов...'));
+
+									// Securely fetch using router's curl (bypasses CORS restrictions)
+									L.fs.exec('/usr/bin/curl', ['-s', '-L', '-k', '--connect-timeout', '10', url]).then(function(res) {
+										if (res.code !== 0 || !res.stdout) {
+											throw new Error('Не удалось скачать данные подписки. Проверьте ссылку или интернет роутера.');
+										}
+
+										var rawContent = res.stdout;
+										var decodedText = decodeSubContent(rawContent);
+										
+										var lines = decodedText.split(/\r?\n/);
+										var importedCount = 0;
+
+										lines.forEach(function(line) {
+											line = line.trim();
+											if (line.startsWith('vless://')) {
+												try {
+													var parsed = parseVlessLink(line);
+													
+													var sid = L.uci.add('microproxy', 'server');
+													L.uci.set('microproxy', sid, 'enabled', '1');
+													L.uci.set('microproxy', sid, 'alias', parsed.alias);
+													L.uci.set('microproxy', sid, 'type', 'vless');
+													L.uci.set('microproxy', sid, 'server', parsed.server);
+													L.uci.set('microproxy', sid, 'server_port', parsed.server_port);
+													L.uci.set('microproxy', sid, 'uuid', parsed.uuid);
+													L.uci.set('microproxy', sid, 'flow', parsed.flow);
+													L.uci.set('microproxy', sid, 'transport', parsed.transport);
+													L.uci.set('microproxy', sid, 'tls', parsed.tls);
+													L.uci.set('microproxy', sid, 'server_name', parsed.server_name);
+													L.uci.set('microproxy', sid, 'public_key', parsed.public_key);
+													L.uci.set('microproxy', sid, 'short_id', parsed.short_id);
+													
+													if (parsed.transport === 'xhttp') {
+														L.uci.set('microproxy', sid, 'xhttp_mode', parsed.xhttp_mode);
+														L.uci.set('microproxy', sid, 'xhttp_padding', parsed.xhttp_padding);
+													}
+													importedCount++;
+												} catch (e) {
+													// Skip invalid links silently
+												}
+											}
+										});
+
+										if (importedCount === 0) {
+											throw new Error('В подписке не найдено корректных серверов VLESS!');
+										}
+
+										return L.uci.save().then(function() {
+											return L.uci.apply();
+										}).then(function() {
+											L.ui.addNotification('success', E('p', {}, 'Успешно импортировано серверов VLESS: ' + importedCount));
+											input.value = '';
+											setTimeout(function() { window.location.reload(); }, 1500);
+										});
 									}).catch(function(err) {
-										L.ui.addNotification('danger', E('p', {}, 'Ошибка UCI: ' + err.message));
+										L.ui.addNotification('danger', E('p', {}, 'Ошибка импорта: ' + err.message));
 										ev.target.disabled = false;
+										input.disabled = false;
 									});
-								} catch (err) {
-									L.ui.addNotification('danger', E('p', {}, 'Ошибка парсинга: ' + err.message));
 								}
-							}
-						}, 'Импортировать сервер')
+							}, 'Импортировать подписку')
+						])
 					])
 				])
 			]);
@@ -123,7 +217,6 @@ return L.view.extend({
 		flow.rmempty = true;
 		
 		var tls = s.option(form.Flag, 'tls', 'Включить Reality/TLS');
-
 		tls.default = '1';
 
 		var sni = s.option(form.Value, 'server_name', 'SNI (Маскировка)');
@@ -197,6 +290,23 @@ return L.view.extend({
 		return m.render();
 	}
 });
+
+// Base64 helper check and decoder
+function decodeSubContent(content) {
+	content = content.trim();
+	if (!content.startsWith('vless://')) {
+		try {
+			var clean = content.replace(/\s/g, '');
+			var decoded = atob(clean);
+			if (decoded && decoded.indexOf('vless://') !== -1) {
+				return decoded;
+			}
+		} catch (e) {
+			// Not Base64 or decoding failed
+		}
+	}
+	return content;
+}
 
 // Helper parser for VLESS Reality strings
 function parseVlessLink(link) {

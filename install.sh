@@ -13,6 +13,14 @@ if ! which curl >/dev/null 2>&1 && ! which wget >/dev/null 2>&1; then
 	exit 1
 fi
 
+# Install dependencies automatically
+echo "Updating package repository..."
+opkg update
+
+echo "Installing system dependencies (sing-box, nftables, curl)..."
+opkg install sing-box nftables curl
+
+
 # Download utility helper
 download_file() {
 	local src="$1"
